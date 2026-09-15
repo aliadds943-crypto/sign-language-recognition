@@ -30,7 +30,7 @@ MODEL_PATH = os.path.join(BASE_DIR, "app", "sign_language_model.keras")
 
 IMG_SIZE = 64
 BATCH_SIZE = 32
-EPOCHS = 50
+EPOCHS = 60
 
 os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
@@ -76,9 +76,23 @@ AUTOTUNE = tf.data.AUTOTUNE
 
 
 def augment(image, label):
+    """Augmentation قوي يحاكي ظروف التصوير بالكاميرا:
+    قلب أفقي + زوم/إزاحة + تغييرات إضاءة وألوان"""
     image = tf.image.random_flip_left_right(image)
-    image = tf.image.random_brightness(image, max_delta=0.1)
-    image = tf.image.random_contrast(image, lower=0.9, upper=1.1)
+
+    # زوم + إزاحة عشوائية (محاكاة تغير المسافة وموضع اليد أمام الكاميرا)
+    scale = tf.random.uniform([], 0.7, 1.0)
+    size = tf.cast(tf.round(64.0 * scale), tf.int32)
+    off_y = tf.cast(tf.random.uniform([], 0, 1) * tf.cast(64 - size, tf.float32), tf.int32)
+    off_x = tf.cast(tf.random.uniform([], 0, 1) * tf.cast(64 - size, tf.float32), tf.int32)
+    image = tf.image.crop_to_bounding_box(image, off_y, off_x, size, size)
+    image = tf.image.resize(image, [IMG_SIZE, IMG_SIZE])
+
+    # تغييرات لونية (محاكاة اختلاف إضاءة الكاميرا)
+    image = tf.image.random_brightness(image, max_delta=0.2)
+    image = tf.image.random_contrast(image, lower=0.8, upper=1.2)
+    image = tf.image.random_hue(image, max_delta=0.05)
+    image = tf.image.random_saturation(image, lower=0.8, upper=1.2)
     image = tf.clip_by_value(image, 0.0, 1.0)
     return image, label
 

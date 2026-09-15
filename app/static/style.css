@@ -264,6 +264,225 @@ header h1 { font-size: 2rem; margin-bottom: 10px; }
 
 .top3-value { font-size: 0.9rem; color: var(--text-muted); min-width: 55px; text-align: left; }
 
+/* ===== أزرار التبويب ===== */
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 8px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.tab-btn.active {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+}
+
+.tab-btn:not(.active):hover { background: rgba(99, 102, 241, 0.12); color: var(--text); }
+
+/* ===== الكاميرا ===== */
+.camera-section { margin-bottom: 30px; }
+
+.camera-box {
+    position: relative;
+    background: #000;
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.camera-box video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);  /* عكس الصورة أفقياً كالمرآة */
+}
+
+/* النتيجة اللحظية فوق الفيديو */
+.live-overlay {
+    position: absolute;
+    bottom: 16px;
+    inset-inline-start: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(99, 102, 241, 0.5);
+    border-radius: 16px;
+    padding: 8px 18px;
+}
+
+.live-digit {
+    font-size: 2.6rem;
+    font-weight: 800;
+    color: #a5b4fc;
+    line-height: 1;
+    min-width: 45px;
+    text-align: center;
+}
+
+.live-digit.pop { animation: pop 0.35s ease; }
+
+@keyframes pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.35); color: #22c55e; }
+    100% { transform: scale(1); }
+}
+
+.live-confidence {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--green);
+}
+
+/* شارة البث المباشر */
+.live-badge {
+    position: absolute;
+    top: 14px;
+    inset-inline-end: 14px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(239, 68, 68, 0.85);
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 5px 14px;
+}
+
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: white;
+    border-radius: 50%;
+    animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.75); }
+}
+
+.camera-actions {
+    margin-top: 18px;
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.camera-hint {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-top: 14px;
+}
+
+/* مربع الإرشاد — ضع يدك داخله */
+.guide-box {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -55%);
+    width: 58%;
+    aspect-ratio: 1 / 1;
+    border: 3px dashed rgba(34, 197, 94, 0.9);
+    border-radius: 18px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.15);
+    pointer-events: none;
+}
+
+.guide-label {
+    position: absolute;
+    top: -34px;
+    right: 50%;
+    transform: translateX(50%);
+    background: rgba(34, 197, 94, 0.9);
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 4px 14px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+/* دليل الإشارات المرجعية */
+.gestures-guide {
+    margin-top: 26px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 22px;
+}
+
+.gestures-title {
+    font-size: 1.05rem;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.gestures-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+}
+
+.gesture-card {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--card-border);
+    background: #000;
+}
+
+.gesture-card img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    display: block;
+}
+
+.gesture-num {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    background: rgba(99, 102, 241, 0.95);
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 800;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+}
+
+@media (max-width: 560px) {
+    .gestures-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
 /* ===== التذييل ===== */
 footer {
     text-align: center;

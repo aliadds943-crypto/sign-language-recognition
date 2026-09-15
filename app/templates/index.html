@@ -13,14 +13,68 @@
         <!-- ===== الترويسة ===== -->
         <header>
             <h1>🤟 نظام التعرف على لغة الإشارة</h1>
-            <p class="subtitle">ارفع صورة يد تُشير إلى رقم (0 - 9) وسيقوم النظام بالتعرف عليه</p>
-            <p class="project-info">المشروع النهائي — مادة تمييز الأنماط · شبكة عصبية CNN من الصفر · دقة 95%+</p>
+            <p class="subtitle">وجّه يدك أمام الكاميرا بإشارة رقم (0 - 9) وسيقوم النظام بالتعرف عليها فوراً</p>
+            <p class="project-info">المشروع النهائي — مادة تمييز الأنماط · شبكة عصبية CNN من الصفر · دقة 96%+</p>
         </header>
 
         <main>
 
-            <!-- ===== منطقة رفع الصورة ===== -->
-            <section class="upload-section">
+            <!-- ===== أزرار التبويب ===== -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="camera" onclick="switchTab('camera')">📷 الكاميرا المباشرة</button>
+                <button class="tab-btn" data-tab="upload" onclick="switchTab('upload')">🖼️ رفع صورة من الجهاز</button>
+            </div>
+
+            <!-- ===== تبويب الكاميرا ===== -->
+            <section id="cameraTab" class="camera-section">
+
+                <div class="camera-box">
+                    <video id="video" autoplay playsinline muted></video>
+                    <canvas id="canvas" hidden></canvas>
+
+                    <!-- مربع الإرشاد: ضع يدك داخله -->
+                    <div id="guideBox" class="guide-box hidden">
+                        <span class="guide-label">ضع يدك هنا ✋</span>
+                    </div>
+
+                    <!-- إطار النتيجة اللحظية فوق الفيديو -->
+                    <div id="liveOverlay" class="live-overlay hidden">
+                        <span class="live-digit" id="liveDigit">?</span>
+                        <span class="live-confidence" id="liveConfidence"></span>
+                    </div>
+
+                    <!-- شارة البث المباشر -->
+                    <div id="liveBadge" class="live-badge hidden">
+                        <span class="pulse-dot"></span> بث مباشر
+                    </div>
+                </div>
+
+                <div class="camera-actions">
+                    <button id="startCamBtn" class="predict-btn" onclick="startCamera()">🎥 تشغيل الكاميرا</button>
+                    <button id="stopCamBtn" class="reset-btn hidden" onclick="stopCamera()">⏹️ إيقاف</button>
+                    <button id="captureBtn" class="predict-btn hidden" onclick="captureFrame()">📸 التقط صورة</button>
+                    <button id="liveBtn" class="reset-btn hidden" onclick="toggleLive()">⚡ التعرف اللحظي</button>
+                </div>
+
+                <p class="camera-hint">💡 ارفع يدك داخل المربع الأخضر واجعلها تملأه — وقلّد نفس الإشارات الموضحة بالأسفل</p>
+
+                <!-- دليل الإشارات المرجعية من الـ Dataset -->
+                <div class="gestures-guide">
+                    <h3 class="gestures-title">🖐️ الإشارات الصحيحة للأرقام (قلّدها بالضبط)</h3>
+                    <div class="gestures-grid">
+                        {% for i in range(10) %}
+                        <div class="gesture-card">
+                            <img src="{{ url_for('static', filename='gestures/' ~ i ~ '.jpg') }}" alt="إشارة الرقم {{ i }}">
+                            <span class="gesture-num">{{ i }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== تبويب رفع الصور ===== -->
+            <section id="uploadTab" class="upload-section hidden">
+
                 <div id="dropZone" class="drop-zone">
                     <div class="drop-zone-content">
                         <div class="drop-icon">📸</div>
@@ -82,32 +136,178 @@
     </div>
 
     <script>
-        const dropZone       = document.getElementById('dropZone');
-        const fileInput      = document.getElementById('fileInput');
+        // =====================================================
+        //  عناصر الصفحة
+        // =====================================================
+        const dropZone         = document.getElementById('dropZone');
+        const fileInput        = document.getElementById('fileInput');
         const previewContainer = document.getElementById('previewContainer');
-        const previewImage   = document.getElementById('previewImage');
-        const predictBtn     = document.getElementById('predictBtn');
-        const resetBtn       = document.getElementById('resetBtn');
-        const resultSection  = document.getElementById('resultSection');
-        const loadingSpinner = document.getElementById('loadingSpinner');
-        const resultContent  = document.getElementById('resultContent');
+        const previewImage     = document.getElementById('previewImage');
+        const predictBtn       = document.getElementById('predictBtn');
+        const resetBtn         = document.getElementById('resetBtn');
+        const resultSection    = document.getElementById('resultSection');
+        const loadingSpinner   = document.getElementById('loadingSpinner');
+        const resultContent    = document.getElementById('resultContent');
+
+        const video       = document.getElementById('video');
+        const canvas      = document.getElementById('canvas');
+        const startCamBtn = document.getElementById('startCamBtn');
+        const stopCamBtn  = document.getElementById('stopCamBtn');
+        const captureBtn  = document.getElementById('captureBtn');
+        const liveBtn     = document.getElementById('liveBtn');
+        const liveOverlay = document.getElementById('liveOverlay');
+        const liveBadge   = document.getElementById('liveBadge');
+        const liveDigit   = document.getElementById('liveDigit');
+        const liveConfidence = document.getElementById('liveConfidence');
+        const guideBox       = document.getElementById('guideBox');
 
         let selectedFile = null;
+        let cameraStream = null;
+        let liveTimer = null;
+        let liveActive = false;
+        let predicting = false;   // لمنع إرسال طلبات متزامنة
 
-        // ===== اختيار الصورة =====
+        // =====================================================
+        //  التبويبات
+        // =====================================================
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector(`.tab-btn[data-tab="${tab}"]`).classList.add('active');
+            document.getElementById('cameraTab').classList.toggle('hidden', tab !== 'camera');
+            document.getElementById('uploadTab').classList.toggle('hidden', tab !== 'upload');
+        }
+
+        // =====================================================
+        //  الكاميرا
+        // =====================================================
+        async function startCamera() {
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+                });
+                video.srcObject = cameraStream;
+                startCamBtn.classList.add('hidden');
+                stopCamBtn.classList.remove('hidden');
+                captureBtn.classList.remove('hidden');
+                liveBtn.classList.remove('hidden');
+                liveBadge.classList.remove('hidden');
+                guideBox.classList.remove('hidden');
+                resultSection.classList.add('hidden');
+            } catch (err) {
+                alert('تعذر تشغيل الكاميرا — تأكد من السماح للمتصفح بالوصول إليها');
+            }
+        }
+
+        function stopCamera() {
+            toggleLive(false);
+            if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+            cameraStream = null;
+            video.srcObject = null;
+            liveOverlay.classList.add('hidden');
+            liveBadge.classList.add('hidden');
+            guideBox.classList.add('hidden');
+            startCamBtn.classList.remove('hidden');
+            stopCamBtn.classList.add('hidden');
+            captureBtn.classList.add('hidden');
+            liveBtn.classList.add('hidden');
+            liveBtn.textContent = '⚡ التعرف اللحظي';
+        }
+
+        function toggleLive(forceState) {
+            liveActive = (forceState !== undefined) ? forceState : !liveActive;
+            if (liveActive) {
+                liveBtn.textContent = '⏸️ إيقاف التعرف اللحظي';
+                liveOverlay.classList.remove('hidden');
+                liveTimer = setInterval(predictFromCamera, 1200);  // كل 1.2 ثانية
+            } else {
+                liveBtn.textContent = '⚡ التعرف اللحظي';
+                if (liveTimer) clearInterval(liveTimer);
+                liveTimer = null;
+            }
+        }
+
+        // التقاط إطار من الفيديو وقص منطقة المربع الإرشادي فقط
+        // (نفس أسلوب صور الـ Dataset: اليد تملأ الصورة)
+        function grabFrame() {
+            const vw = video.videoWidth, vh = video.videoHeight;
+            canvas.width = vw;
+            canvas.height = vh;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+
+            // قص مربع مركزي بنسبة 60% من أصغر بُعد (يطابق المربع الإرشادي)
+            const side = Math.round(Math.min(vw, vh) * 0.6);
+            const sx = Math.round((vw - side) / 2);
+            const sy = Math.round((vh - side) / 2);
+
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = 128;
+            cropCanvas.height = 128;
+            cropCanvas.getContext('2d').drawImage(canvas, sx, sy, side, side, 0, 0, 128, 128);
+
+            return new Promise(resolve => cropCanvas.toBlob(resolve, 'image/jpeg', 0.9));
+        }
+
+        // التعرف اللحظي — يحدّث النتيجة فوق الفيديو فقط
+        async function predictFromCamera() {
+            if (!cameraStream || predicting || video.readyState < 2) return;
+            predicting = true;
+            try {
+                const blob = await grabFrame();
+                const formData = new FormData();
+                formData.append('image', blob, 'frame.jpg');
+                const response = await fetch('/predict', { method: 'POST', body: formData });
+                const data = await response.json();
+                if (response.ok) {
+                    liveDigit.textContent = data.digit;
+                    liveConfidence.textContent = data.confidence + '%';
+                    liveDigit.classList.remove('pop');
+                    void liveDigit.offsetWidth;   // إعادة تشغيل الأنيميشن
+                    liveDigit.classList.add('pop');
+                }
+            } catch (err) { /* تجاهل أخطاء الشبكة اللحظية */ }
+            predicting = false;
+        }
+
+        // زر التصوير — يعرض النتيجة الكاملة في القسم السفلي
+        async function captureFrame() {
+            if (!cameraStream || predicting) return;
+            predicting = true;
+            resultSection.classList.remove('hidden');
+            loadingSpinner.classList.remove('hidden');
+            resultContent.classList.add('hidden');
+
+            try {
+                const blob = await grabFrame();
+                const formData = new FormData();
+                formData.append('image', blob, 'capture.jpg');
+                const response = await fetch('/predict', { method: 'POST', body: formData });
+                const data = await response.json();
+                if (!response.ok) {
+                    alert(data.error || 'حدث خطأ غير متوقع');
+                    resultSection.classList.add('hidden');
+                    return;
+                }
+                showResult(data);
+            } catch (err) {
+                alert('تعذر الاتصال بالخادم');
+                resultSection.classList.add('hidden');
+            }
+            predicting = false;
+        }
+
+        // =====================================================
+        //  رفع الصور من الجهاز
+        // =====================================================
         fileInput.addEventListener('change', () => {
             if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
         });
 
-        // ===== السحب والإفلات =====
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             dropZone.classList.add('drag-over');
         });
 
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('drag-over');
-        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
 
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
@@ -128,7 +328,6 @@
             reader.readAsDataURL(file);
         }
 
-        // ===== زر إعادة التعيين =====
         resetBtn.addEventListener('click', () => {
             selectedFile = null;
             fileInput.value = '';
@@ -137,11 +336,9 @@
             resultSection.classList.add('hidden');
         });
 
-        // ===== التنبؤ =====
         predictBtn.addEventListener('click', async () => {
             if (!selectedFile) return;
 
-            // إظهار قسم النتيجة مع مؤشر التحميل
             resultSection.classList.remove('hidden');
             loadingSpinner.classList.remove('hidden');
             resultContent.classList.add('hidden');
@@ -158,7 +355,6 @@
                     resultSection.classList.add('hidden');
                     return;
                 }
-
                 showResult(data);
             } catch (err) {
                 alert('تعذر الاتصال بالخادم — تأكد من أن التطبيق يعمل');
@@ -166,25 +362,24 @@
             }
         });
 
+        // =====================================================
+        //  عرض النتيجة الكاملة
+        // =====================================================
         function showResult(data) {
             loadingSpinner.classList.add('hidden');
             resultContent.classList.remove('hidden');
 
-            // الرقم المتوقع
             document.getElementById('predictedDigit').textContent = data.digit;
 
-            // نسبة الثقة
             const fill = document.getElementById('confidenceFill');
             fill.style.width = data.confidence + '%';
             document.getElementById('confidenceText').textContent = data.confidence + '%';
 
-            // تلوين شريط الثقة حسب القوة
             fill.classList.remove('high', 'medium', 'low');
             if (data.confidence >= 85)      fill.classList.add('high');
             else if (data.confidence >= 60)  fill.classList.add('medium');
             else                             fill.classList.add('low');
 
-            // أفضل 3 توقعات
             const top3List = document.getElementById('top3List');
             top3List.innerHTML = '';
             data.top3.forEach((item, i) => {
