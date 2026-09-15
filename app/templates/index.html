@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤟 نظام التعرف على لغة الإشارة</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <div class="container">
+
+        <!-- ===== الترويسة ===== -->
+        <header>
+            <h1>🤟 نظام التعرف على لغة الإشارة</h1>
+            <p class="subtitle">ارفع صورة يد تُشير إلى رقم (0 - 9) وسيقوم النظام بالتعرف عليه</p>
+            <p class="project-info">المشروع النهائي — مادة تمييز الأنماط · شبكة عصبية CNN من الصفر · دقة 95%+</p>
+        </header>
+
+        <main>
+
+            <!-- ===== منطقة رفع الصورة ===== -->
+            <section class="upload-section">
+                <div id="dropZone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <div class="drop-icon">📸</div>
+                        <p class="drop-text">اسحب الصورة وأفلتها هنا</p>
+                        <p class="drop-or">أو</p>
+                        <label for="fileInput" class="browse-btn">اختر صورة من جهازك</label>
+                        <input type="file" id="fileInput" accept="image/*" hidden>
+                    </div>
+                </div>
+
+                <!-- معاينة الصورة -->
+                <div id="previewContainer" class="preview-container hidden">
+                    <img id="previewImage" alt="معاينة الصورة">
+                    <div class="preview-actions">
+                        <button id="predictBtn" class="predict-btn">🔍 تعرّف على الإشارة</button>
+                        <button id="resetBtn" class="reset-btn">🗑️ صورة أخرى</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== نتيجة التنبؤ ===== -->
+            <section id="resultSection" class="result-section hidden">
+
+                <div class="loading" id="loadingSpinner">
+                    <div class="spinner"></div>
+                    <p>⏳ جارٍ تحليل الإشارة...</p>
+                </div>
+
+                <div id="resultContent" class="hidden">
+                    <h2 class="result-title">نتيجة التعرّف</h2>
+
+                    <!-- الرقم المتوقع -->
+                    <div class="main-result">
+                        <div class="digit-circle">
+                            <span id="predictedDigit">0</span>
+                        </div>
+                        <div class="confidence-box">
+                            <p class="confidence-label">نسبة الثقة</p>
+                            <div class="confidence-bar">
+                                <div id="confidenceFill" class="confidence-fill"></div>
+                            </div>
+                            <p id="confidenceText" class="confidence-value">0%</p>
+                        </div>
+                    </div>
+
+                    <!-- أفضل 3 توقعات -->
+                    <h3 class="top3-title">أعلى 3 توقعات محتملة</h3>
+                    <div id="top3List" class="top3-list"></div>
+                </div>
+
+            </section>
+
+        </main>
+
+        <footer>
+            <p>تم بناء الشبكة العصبية بالكامل من الصفر (بدون Transfer Learning) · التدريب على Google Colab</p>
+        </footer>
+
+    </div>
+
+    <script>
+        const dropZone       = document.getElementById('dropZone');
+        const fileInput      = document.getElementById('fileInput');
+        const previewContainer = document.getElementById('previewContainer');
+        const previewImage   = document.getElementById('previewImage');
+        const predictBtn     = document.getElementById('predictBtn');
+        const resetBtn       = document.getElementById('resetBtn');
+        const resultSection  = document.getElementById('resultSection');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const resultContent  = document.getElementById('resultContent');
+
+        let selectedFile = null;
+
+        // ===== اختيار الصورة =====
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+        });
+
+        // ===== السحب والإفلات =====
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) handleFile(file);
+        });
+
+        function handleFile(file) {
+            selectedFile = file;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImage.src = e.target.result;
+                dropZone.classList.add('hidden');
+                previewContainer.classList.remove('hidden');
+                resultSection.classList.add('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // ===== زر إعادة التعيين =====
+        resetBtn.addEventListener('click', () => {
+            selectedFile = null;
+            fileInput.value = '';
+            previewContainer.classList.add('hidden');
+            dropZone.classList.remove('hidden');
+            resultSection.classList.add('hidden');
+        });
+
+        // ===== التنبؤ =====
+        predictBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            // إظهار قسم النتيجة مع مؤشر التحميل
+            resultSection.classList.remove('hidden');
+            loadingSpinner.classList.remove('hidden');
+            resultContent.classList.add('hidden');
+
+            const formData = new FormData();
+            formData.append('image', selectedFile);
+
+            try {
+                const response = await fetch('/predict', { method: 'POST', body: formData });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert(data.error || 'حدث خطأ غير متوقع');
+                    resultSection.classList.add('hidden');
+                    return;
+                }
+
+                showResult(data);
+            } catch (err) {
+                alert('تعذر الاتصال بالخادم — تأكد من أن التطبيق يعمل');
+                resultSection.classList.add('hidden');
+            }
+        });
+
+        function showResult(data) {
+            loadingSpinner.classList.add('hidden');
+            resultContent.classList.remove('hidden');
+
+            // الرقم المتوقع
+            document.getElementById('predictedDigit').textContent = data.digit;
+
+            // نسبة الثقة
+            const fill = document.getElementById('confidenceFill');
+            fill.style.width = data.confidence + '%';
+            document.getElementById('confidenceText').textContent = data.confidence + '%';
+
+            // تلوين شريط الثقة حسب القوة
+            fill.classList.remove('high', 'medium', 'low');
+            if (data.confidence >= 85)      fill.classList.add('high');
+            else if (data.confidence >= 60)  fill.classList.add('medium');
+            else                             fill.classList.add('low');
+
+            // أفضل 3 توقعات
+            const top3List = document.getElementById('top3List');
+            top3List.innerHTML = '';
+            data.top3.forEach((item, i) => {
+                const row = document.createElement('div');
+                row.className = 'top3-item' + (i === 0 ? ' winner' : '');
+                row.innerHTML = `
+                    <span class="top3-rank">${i + 1}</span>
+                    <span class="top3-digit">الرقم ${item.digit}</span>
+                    <div class="top3-bar">
+                        <div class="top3-fill" style="width:${item.confidence}%"></div>
+                    </div>
+                    <span class="top3-value">${item.confidence}%</span>
+                `;
+                top3List.appendChild(row);
+            });
+        }
+    </script>
+
+</body>
+</html>

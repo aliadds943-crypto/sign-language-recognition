@@ -1,0 +1,7 @@
+# المكتبات المطلوبة لتشغيل واجهة المشروع
+# التثبيت: pip install -r requirements.txt
+
+flask>=3.0
+numpy>=1.24
+pillow>=10.0
+tensorflow>=2.15
